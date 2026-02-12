@@ -69,6 +69,7 @@ export class CameraManager {
 
   /**
    * Capture a photo from the current video stream
+   * Crops to match the visible area in the preview (object-fit: cover)
    */
   capturePhoto(): ImageData {
     if (!this.videoElement) {
@@ -79,18 +80,50 @@ export class CameraManager {
       throw new Error('Camera is not active');
     }
 
-    // Create a canvas to capture the frame
+    // Get video intrinsic dimensions
+    const videoWidth = this.videoElement.videoWidth;
+    const videoHeight = this.videoElement.videoHeight;
+
+    // Get displayed element dimensions
+    const displayWidth = this.videoElement.clientWidth;
+    const displayHeight = this.videoElement.clientHeight;
+
+    // Calculate aspect ratios
+    const videoAspect = videoWidth / videoHeight;
+    const displayAspect = displayWidth / displayHeight;
+
+    // Calculate the crop rectangle for object-fit: cover
+    let sourceX = 0;
+    let sourceY = 0;
+    let sourceWidth = videoWidth;
+    let sourceHeight = videoHeight;
+
+    if (videoAspect > displayAspect) {
+      // Video is wider than display - crop sides
+      sourceWidth = videoHeight * displayAspect;
+      sourceX = (videoWidth - sourceWidth) / 2;
+    } else {
+      // Video is taller than display - crop top/bottom
+      sourceHeight = videoWidth / displayAspect;
+      sourceY = (videoHeight - sourceHeight) / 2;
+    }
+
+    // Create a canvas with the display dimensions
     const canvas = document.createElement('canvas');
-    canvas.width = this.videoElement.videoWidth;
-    canvas.height = this.videoElement.videoHeight;
+    canvas.width = displayWidth;
+    canvas.height = displayHeight;
 
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('Failed to get canvas context');
     }
 
-    // Draw the current video frame to the canvas
-    context.drawImage(this.videoElement, 0, 0, canvas.width, canvas.height);
+    // Draw only the visible portion of the video
+    context.drawImage(
+      this.videoElement,
+      sourceX, sourceY, sourceWidth, sourceHeight,  // Source rectangle
+      0, 0, displayWidth, displayHeight              // Destination rectangle
+    );
 
     // Get the image data
     return context.getImageData(0, 0, canvas.width, canvas.height);

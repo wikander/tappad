@@ -1,7 +1,7 @@
-import { CameraManager } from '../camera/CameraManager';
-import { OCREngine } from '../ocr/OCREngine';
-import type { OCRResult, OCRProgress } from '../ocr/types';
-import { getErrorMessage, isAppError } from '../../utils/errors';
+import { CameraManager } from "../camera/CameraManager";
+import { OCREngine } from "../ocr/OCREngine";
+import type { OCRResult, OCRProgress } from "../ocr/types";
+import { getErrorMessage, isAppError } from "../../utils/errors";
 
 export class OCRInterface {
   private container: HTMLElement;
@@ -9,6 +9,7 @@ export class OCRInterface {
   private ocrEngine: OCREngine;
   private capturedImageData: ImageData | null = null;
   private lastResult: OCRResult | null = null;
+  private extractedNumbers: string[] = [];
   private isStartingCamera = false;
 
   constructor(container: HTMLElement) {
@@ -68,17 +69,16 @@ export class OCRInterface {
    * Render the captured photo view
    */
   private renderCapturedView(): void {
-
     if (!this.capturedImageData) {
-      this.renderError('No image captured');
+      this.renderError("No image captured");
       return;
     }
 
     // Create a canvas to display the captured image
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = this.capturedImageData.width;
     canvas.height = this.capturedImageData.height;
-    const context = canvas.getContext('2d');
+    const context = canvas.getContext("2d");
 
     if (context) {
       context.putImageData(this.capturedImageData, 0, 0);
@@ -97,11 +97,12 @@ export class OCRInterface {
     `;
 
     // Copy the image to the canvas in the DOM
-    const displayCanvas = this.container.querySelector<HTMLCanvasElement>('.capture-canvas');
+    const displayCanvas =
+      this.container.querySelector<HTMLCanvasElement>(".capture-canvas");
     if (displayCanvas && context) {
       displayCanvas.width = canvas.width;
       displayCanvas.height = canvas.height;
-      const displayContext = displayCanvas.getContext('2d');
+      const displayContext = displayCanvas.getContext("2d");
       if (displayContext) {
         displayContext.drawImage(canvas, 0, 0);
       }
@@ -126,14 +127,59 @@ export class OCRInterface {
   }
 
   /**
+   * Extract number sequences from text
+   */
+  private extractNumberSequences(text: string): string[] {
+    // Match sequences of digits and spaces, at least 2 characters long
+    const matches = text.match(/[\d\s+-]{8,}/g);
+
+    if (!matches) {
+      return [];
+    }
+
+    return matches
+      .map((match) => match.trim()) // Remove leading/trailing spaces
+      .filter((seq) => /\d/.test(seq)) // Must contain at least one digit
+      .filter((seq) => seq.replace(/\s/g, "").length >= 2); // At least 2 digits (ignoring spaces)
+  }
+
+  /**
    * Render the results view
    */
   private renderResultsView(): void {
-
     if (!this.lastResult) {
-      this.renderError('No OCR results available');
+      this.renderError("No OCR results available");
       return;
     }
+
+    // Extract number sequences
+    this.extractedNumbers = this.extractNumberSequences(this.lastResult.text);
+
+    const numbersHtml =
+      this.extractedNumbers.length > 0
+        ? `
+        <div class="numbers-section">
+          <h3>Detected Numbers</h3>
+          <div class="number-chips">
+            ${this.extractedNumbers
+              .map(
+                (num, index) => `
+              <div class="number-chip">
+                <span class="number-text">${num}</span>
+                <button class="copy-number-btn" data-index="${index}" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        </div>
+      `
+        : "";
 
     this.container.innerHTML = `
       <div class="ocr-container">
@@ -141,6 +187,9 @@ export class OCRInterface {
         <div class="results-info">
           <span>Confidence: ${Math.round(this.lastResult.confidence)}%</span>
         </div>
+
+        ${numbersHtml}
+
         <textarea class="results-area" readonly>${this.lastResult.text}</textarea>
         <div class="button-group">
           <button id="copy-text" class="primary-button">
@@ -177,16 +226,18 @@ export class OCRInterface {
       </div>
     `;
 
-    const retryBtn = this.container.querySelector('#retry');
-    retryBtn?.addEventListener('click', () => this.handleReset());
+    const retryBtn = this.container.querySelector("#retry");
+    retryBtn?.addEventListener("click", () => this.handleReset());
   }
 
   /**
    * Update progress during OCR processing
    */
   private updateProgress(progress: OCRProgress): void {
-    const messageEl = this.container.querySelector<HTMLParagraphElement>('#progress-message');
-    const percentEl = this.container.querySelector<HTMLParagraphElement>('#progress-percent');
+    const messageEl =
+      this.container.querySelector<HTMLParagraphElement>("#progress-message");
+    const percentEl =
+      this.container.querySelector<HTMLParagraphElement>("#progress-percent");
 
     if (messageEl) {
       messageEl.textContent = progress.message;
@@ -200,32 +251,44 @@ export class OCRInterface {
   // Event Handlers
 
   private attachIdleEventListeners(): void {
-    const startBtn = this.container.querySelector('#start-camera');
-    startBtn?.addEventListener('click', () => this.handleStartCamera());
+    const startBtn = this.container.querySelector("#start-camera");
+    startBtn?.addEventListener("click", () => this.handleStartCamera());
   }
 
   private attachCameraEventListeners(): void {
-    const captureBtn = this.container.querySelector('#capture-photo');
-    const cancelBtn = this.container.querySelector('#cancel-camera');
+    const captureBtn = this.container.querySelector("#capture-photo");
+    const cancelBtn = this.container.querySelector("#cancel-camera");
 
-    captureBtn?.addEventListener('click', () => this.handleCapture());
-    cancelBtn?.addEventListener('click', () => this.handleCancel());
+    captureBtn?.addEventListener("click", () => this.handleCapture());
+    cancelBtn?.addEventListener("click", () => this.handleCancel());
   }
 
   private attachCapturedEventListeners(): void {
-    const processBtn = this.container.querySelector('#process-ocr');
-    const retakeBtn = this.container.querySelector('#retake-photo');
+    const processBtn = this.container.querySelector("#process-ocr");
+    const retakeBtn = this.container.querySelector("#retake-photo");
 
-    processBtn?.addEventListener('click', () => this.handleProcessOCR());
-    retakeBtn?.addEventListener('click', () => this.handleRetake());
+    processBtn?.addEventListener("click", () => this.handleProcessOCR());
+    retakeBtn?.addEventListener("click", () => this.handleRetake());
   }
 
   private attachResultsEventListeners(): void {
-    const copyBtn = this.container.querySelector('#copy-text');
-    const scanAgainBtn = this.container.querySelector('#scan-again');
+    const copyBtn = this.container.querySelector("#copy-text");
+    const scanAgainBtn = this.container.querySelector("#scan-again");
+    const copyNumberBtns = this.container.querySelectorAll(".copy-number-btn");
 
-    copyBtn?.addEventListener('click', () => this.handleCopyText());
-    scanAgainBtn?.addEventListener('click', () => this.handleReset());
+    copyBtn?.addEventListener("click", () => this.handleCopyText());
+    scanAgainBtn?.addEventListener("click", () => this.handleReset());
+
+    // Attach event listeners to each number copy button
+    copyNumberBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const index = parseInt(
+          (e.currentTarget as HTMLElement).dataset.index || "0",
+          10,
+        );
+        this.handleCopyNumber(index);
+      });
+    });
   }
 
   /**
@@ -234,7 +297,7 @@ export class OCRInterface {
   private async handleStartCamera(): Promise<void> {
     // Prevent multiple simultaneous calls
     if (this.isStartingCamera) {
-      console.log('Camera start already in progress, ignoring duplicate call');
+      console.log("Camera start already in progress, ignoring duplicate call");
       return;
     }
 
@@ -245,7 +308,7 @@ export class OCRInterface {
       const isAvailable = await this.cameraManager.checkCameraAvailability();
       if (!isAvailable) {
         this.renderError(
-          'No camera detected. Please ensure your device has a camera and try again.'
+          "No camera detected. Please ensure your device has a camera and try again.",
         );
         return;
       }
@@ -254,43 +317,46 @@ export class OCRInterface {
       this.renderCameraView();
 
       // Wait a brief moment for DOM to update
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Find video element first
-      const video = this.container.querySelector<HTMLVideoElement>('.video-preview');
-      console.log('Video element found:', video);
+      const video =
+        this.container.querySelector<HTMLVideoElement>(".video-preview");
+      console.log("Video element found:", video);
 
       if (!video) {
-        console.error('Container contents:', this.container.innerHTML);
-        throw new Error('Video element not found in DOM');
+        console.error("Container contents:", this.container.innerHTML);
+        throw new Error("Video element not found in DOM");
       }
 
       // Request camera access (try back camera first, fallback to front if not available)
       try {
         await this.cameraManager.requestCameraAccess({
           video: {
-            facingMode: 'environment',
+            facingMode: "environment",
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
         });
       } catch (error) {
         // Fallback to front camera if back camera not available
-        console.log('Back camera not available, trying front camera...');
+        console.log("Back camera not available, trying front camera...");
         await this.cameraManager.requestCameraAccess({
           video: {
-            facingMode: 'user',
+            facingMode: "user",
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },
         });
       }
 
-      console.log('Attaching camera to video element...');
+      console.log("Attaching camera to video element...");
       this.cameraManager.attachToVideoElement(video);
-      console.log('Camera attached successfully');
+      console.log("Camera attached successfully");
     } catch (error) {
-      const message = isAppError(error) ? getErrorMessage(error) : 'Failed to start camera';
+      const message = isAppError(error)
+        ? getErrorMessage(error)
+        : "Failed to start camera";
       this.renderError(message);
       this.cameraManager.stopCamera();
     } finally {
@@ -307,8 +373,8 @@ export class OCRInterface {
       this.cameraManager.stopCamera();
       this.renderCapturedView();
     } catch (error) {
-      console.error('Capture error:', error);
-      this.renderError('Failed to capture photo. Please try again.');
+      console.error("Capture error:", error);
+      this.renderError("Failed to capture photo. Please try again.");
     }
   }
 
@@ -333,7 +399,7 @@ export class OCRInterface {
    */
   private async handleProcessOCR(): Promise<void> {
     if (!this.capturedImageData) {
-      this.renderError('No image to process');
+      this.renderError("No image to process");
       return;
     }
 
@@ -348,13 +414,13 @@ export class OCRInterface {
       }
 
       // Convert ImageData to Canvas for better Tesseract.js compatibility
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = this.capturedImageData.width;
       canvas.height = this.capturedImageData.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
 
       if (!ctx) {
-        throw new Error('Failed to create canvas context');
+        throw new Error("Failed to create canvas context");
       }
 
       ctx.putImageData(this.capturedImageData, 0, 0);
@@ -366,7 +432,9 @@ export class OCRInterface {
       // Show results
       this.renderResultsView();
     } catch (error) {
-      const message = isAppError(error) ? getErrorMessage(error) : 'OCR processing failed';
+      const message = isAppError(error)
+        ? getErrorMessage(error)
+        : "OCR processing failed";
       this.renderError(message);
     }
   }
@@ -383,17 +451,46 @@ export class OCRInterface {
       await navigator.clipboard.writeText(this.lastResult.text);
 
       // Visual feedback
-      const copyBtn = this.container.querySelector('#copy-text');
+      const copyBtn = this.container.querySelector("#copy-text");
       if (copyBtn) {
         const originalText = copyBtn.innerHTML;
-        copyBtn.innerHTML = '✓ Copied!';
+        copyBtn.innerHTML = "✓ Copied!";
         setTimeout(() => {
           copyBtn.innerHTML = originalText;
         }, 2000);
       }
     } catch (error) {
-      console.error('Failed to copy text:', error);
-      alert('Failed to copy text to clipboard');
+      console.error("Failed to copy text:", error);
+      alert("Failed to copy text to clipboard");
+    }
+  }
+
+  /**
+   * Handle copy number button click
+   */
+  private async handleCopyNumber(index: number): Promise<void> {
+    if (index < 0 || index >= this.extractedNumbers.length) {
+      return;
+    }
+
+    const number = this.extractedNumbers[index];
+
+    try {
+      await navigator.clipboard.writeText(number);
+
+      // Visual feedback
+      const btn = this.container.querySelector(
+        `.copy-number-btn[data-index="${index}"]`,
+      );
+      if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span style="font-size: 14px;">✓</span>';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Failed to copy number:", error);
     }
   }
 

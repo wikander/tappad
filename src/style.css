@@ -151,6 +151,72 @@ button:disabled {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* Numbers Section */
+.numbers-section {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.numbers-section h3 {
+  font-size: 1.2rem;
+  margin-bottom: 0.75rem;
+  color: rgba(255, 255, 255, 0.87);
+}
+
+.number-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.number-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(100, 108, 255, 0.15);
+  border: 1px solid rgba(100, 108, 255, 0.3);
+  border-radius: 6px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.95);
+  transition: all 0.2s ease;
+}
+
+.number-chip:hover {
+  background: rgba(100, 108, 255, 0.25);
+  border-color: rgba(100, 108, 255, 0.5);
+}
+
+.number-text {
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.copy-number-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 22px;
+  min-height: 22px;
+}
+
+.copy-number-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.copy-number-btn:active {
+  transform: scale(0.95);
+}
+
 .results-area {
   width: 100%;
   min-height: 300px;
