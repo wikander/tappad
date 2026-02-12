@@ -188,6 +188,52 @@ export class OCRInterface {
   }
 
   /**
+   * Generate SMS link with phone number, location, and words
+   */
+  private generateSMSLink(): string {
+    // Need at least one phone number
+    if (this.extractedNumbers.length === 0) {
+      return '';
+    }
+
+    // Use the first (or longest) number as the phone number
+    const phoneNumber = this.extractedNumbers[0].replace(/\s/g, '');
+
+    // Build message body
+    const messageParts: string[] = [];
+
+    // Add location if available
+    if (this.capturedLocation) {
+      const mapsUrl = `https://www.google.com/maps?q=${this.capturedLocation.latitude},${this.capturedLocation.longitude}`;
+      messageParts.push(mapsUrl);
+    }
+
+    // Add words if available
+    if (this.extractedWords.length > 0) {
+      messageParts.push(this.extractedWords.join(' '));
+    }
+
+    // If we have content to send
+    if (messageParts.length > 0) {
+      const messageBody = encodeURIComponent(messageParts.join('\n\n'));
+      const smsUrl = `sms:${phoneNumber}?body=${messageBody}`;
+
+      return `
+        <div class="sms-action">
+          <a href="${smsUrl}" class="sms-link">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            Send SMS to ${phoneNumber}
+          </a>
+        </div>
+      `;
+    }
+
+    return '';
+  }
+
+  /**
    * Render the results view
    */
   private renderResultsView(): void {
@@ -266,6 +312,9 @@ export class OCRInterface {
       `
       : '';
 
+    // Generate SMS link if we have a phone number
+    const smsHtml = this.generateSMSLink();
+
     this.container.innerHTML = `
       <div class="ocr-container">
         <h2>Extracted Text</h2>
@@ -274,6 +323,7 @@ export class OCRInterface {
           ${locationHtml}
         </div>
 
+        ${smsHtml}
         ${numbersHtml}
         ${wordsHtml}
 
