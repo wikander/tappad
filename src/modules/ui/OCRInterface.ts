@@ -188,7 +188,7 @@ export class OCRInterface {
   }
 
   /**
-   * Generate SMS link with phone number, location, and words
+   * Generate SMS link with selected phone number, location, and selected words
    */
   private generateSMSLink(): string {
     // Need at least one phone number
@@ -196,21 +196,49 @@ export class OCRInterface {
       return '';
     }
 
-    // Use the first (or longest) number as the phone number
-    const phoneNumber = this.extractedNumbers[0].replace(/\s/g, '');
+    return `
+      <div class="sms-action" id="sms-action-container">
+        <!-- SMS link will be inserted here by updateSMSLink() -->
+      </div>
+    `;
+  }
+
+  /**
+   * Update SMS link based on current form selections
+   */
+  private updateSMSLink(): void {
+    const container = this.container.querySelector('#sms-action-container');
+    if (!container) return;
+
+    // Get selected phone number
+    const selectedRadio = this.container.querySelector<HTMLInputElement>('input[name="phone-number"]:checked');
+    if (!selectedRadio) {
+      container.innerHTML = '';
+      return;
+    }
+
+    const phoneIndex = parseInt(selectedRadio.value, 10);
+    const phoneNumber = this.extractedNumbers[phoneIndex].replace(/\s/g, '');
+
+    // Get selected words
+    const selectedWordCheckboxes = this.container.querySelectorAll<HTMLInputElement>('input[name="word"]:checked');
+    const selectedWords = Array.from(selectedWordCheckboxes).map(cb => {
+      const wordIndex = parseInt(cb.value, 10);
+      return this.extractedWords[wordIndex];
+    });
 
     // Build message body
     const messageParts: string[] = [];
 
     // Add location if available
     if (this.capturedLocation) {
-      const mapsUrl = `https://www.google.com/maps?q=${this.capturedLocation.latitude},${this.capturedLocation.longitude}`;
+      const mapsUrl = `https://maps.google.com/?q=${this.capturedLocation.latitude.toFixed(6)},${this.capturedLocation.longitude.toFixed(6)}`;
       messageParts.push(mapsUrl);
     }
 
-    // Add words if available
-    if (this.extractedWords.length > 0) {
-      messageParts.push(this.extractedWords.join(' '));
+    // Add selected words
+    if (selectedWords.length > 0) {
+      messageParts.push(selectedWords.join(' '));
     }
 
     // If we have content to send
@@ -218,19 +246,17 @@ export class OCRInterface {
       const messageBody = encodeURIComponent(messageParts.join('\n\n'));
       const smsUrl = `sms:${phoneNumber}?body=${messageBody}`;
 
-      return `
-        <div class="sms-action">
-          <a href="${smsUrl}" class="sms-link">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-            Send SMS to ${phoneNumber}
-          </a>
-        </div>
+      container.innerHTML = `
+        <a href="${smsUrl}" class="sms-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          Send SMS to ${phoneNumber}
+        </a>
       `;
+    } else {
+      container.innerHTML = '';
     }
-
-    return '';
   }
 
   /**
@@ -250,20 +276,22 @@ export class OCRInterface {
       this.extractedNumbers.length > 0
         ? `
         <div class="numbers-section">
-          <h3>Detected Numbers</h3>
-          <div class="number-chips">
+          <h3>Select Phone Number</h3>
+          <div class="number-options">
             ${this.extractedNumbers
               .map(
                 (num, index) => `
-              <div class="number-chip">
-                <span class="number-text">${num}</span>
-                <button class="copy-number-btn" data-index="${index}" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-              </div>
+              <label class="option-label">
+                <input
+                  type="radio"
+                  name="phone-number"
+                  value="${index}"
+                  ${index === 0 ? 'checked' : ''}
+                  ${this.extractedNumbers.length === 1 ? 'disabled' : ''}
+                  class="number-radio"
+                />
+                <span class="option-text">${num}</span>
+              </label>
             `,
               )
               .join("")}
@@ -276,20 +304,21 @@ export class OCRInterface {
       this.extractedWords.length > 0
         ? `
         <div class="words-section">
-          <h3>Detected Words</h3>
-          <div class="word-chips">
+          <h3>Select Words</h3>
+          <div class="word-options">
             ${this.extractedWords
               .map(
                 (word, index) => `
-              <div class="word-chip">
-                <span class="word-text">${word}</span>
-                <button class="copy-word-btn" data-index="${index}" title="Copy">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                </button>
-              </div>
+              <label class="option-label">
+                <input
+                  type="checkbox"
+                  name="word"
+                  value="${index}"
+                  ${this.extractedWords.length === 1 ? 'checked disabled' : 'checked'}
+                  class="word-checkbox"
+                />
+                <span class="option-text">${word}</span>
+              </label>
             `,
               )
               .join("")}
@@ -305,7 +334,7 @@ export class OCRInterface {
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
-          <a href="https://www.google.com/maps?q=${this.capturedLocation.latitude},${this.capturedLocation.longitude}" target="_blank" rel="noopener noreferrer" class="location-link">
+          <a href="https://maps.google.com/?q=${this.capturedLocation.latitude.toFixed(6)},${this.capturedLocation.longitude.toFixed(6)}" target="_blank" rel="noopener noreferrer" class="location-link">
             ${this.capturedLocation.latitude.toFixed(6)}, ${this.capturedLocation.longitude.toFixed(6)}
           </a>
         </div>
@@ -411,33 +440,24 @@ export class OCRInterface {
   private attachResultsEventListeners(): void {
     const copyBtn = this.container.querySelector("#copy-text");
     const scanAgainBtn = this.container.querySelector("#scan-again");
-    const copyNumberBtns = this.container.querySelectorAll(".copy-number-btn");
-    const copyWordBtns = this.container.querySelectorAll(".copy-word-btn");
+    const numberRadios = this.container.querySelectorAll<HTMLInputElement>(".number-radio");
+    const wordCheckboxes = this.container.querySelectorAll<HTMLInputElement>(".word-checkbox");
 
     copyBtn?.addEventListener("click", () => this.handleCopyText());
     scanAgainBtn?.addEventListener("click", () => this.handleReset());
 
-    // Attach event listeners to each number copy button
-    copyNumberBtns.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const index = parseInt(
-          (e.currentTarget as HTMLElement).dataset.index || "0",
-          10,
-        );
-        this.handleCopyNumber(index);
-      });
+    // Attach event listeners to phone number radios
+    numberRadios.forEach((radio) => {
+      radio.addEventListener("change", () => this.updateSMSLink());
     });
 
-    // Attach event listeners to each word copy button
-    copyWordBtns.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const index = parseInt(
-          (e.currentTarget as HTMLElement).dataset.index || "0",
-          10,
-        );
-        this.handleCopyWord(index);
-      });
+    // Attach event listeners to word checkboxes
+    wordCheckboxes.forEach((checkbox) => {
+      checkbox.addEventListener("change", () => this.updateSMSLink());
     });
+
+    // Initial SMS link generation
+    this.updateSMSLink();
   }
 
   /**
@@ -617,64 +637,6 @@ export class OCRInterface {
     } catch (error) {
       console.error("Failed to copy text:", error);
       alert("Failed to copy text to clipboard");
-    }
-  }
-
-  /**
-   * Handle copy number button click
-   */
-  private async handleCopyNumber(index: number): Promise<void> {
-    if (index < 0 || index >= this.extractedNumbers.length) {
-      return;
-    }
-
-    const number = this.extractedNumbers[index];
-
-    try {
-      await navigator.clipboard.writeText(number);
-
-      // Visual feedback
-      const btn = this.container.querySelector(
-        `.copy-number-btn[data-index="${index}"]`,
-      );
-      if (btn) {
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<span style="font-size: 14px;">✓</span>';
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-        }, 2000);
-      }
-    } catch (error) {
-      console.error("Failed to copy number:", error);
-    }
-  }
-
-  /**
-   * Handle copy word button click
-   */
-  private async handleCopyWord(index: number): Promise<void> {
-    if (index < 0 || index >= this.extractedWords.length) {
-      return;
-    }
-
-    const word = this.extractedWords[index];
-
-    try {
-      await navigator.clipboard.writeText(word);
-
-      // Visual feedback
-      const btn = this.container.querySelector(
-        `.copy-word-btn[data-index="${index}"]`,
-      );
-      if (btn) {
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<span style="font-size: 14px;">✓</span>';
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-        }, 2000);
-      }
-    } catch (error) {
-      console.error("Failed to copy word:", error);
     }
   }
 
