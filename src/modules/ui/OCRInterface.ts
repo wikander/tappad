@@ -10,6 +10,7 @@ export class OCRInterface {
   private capturedImageData: ImageData | null = null;
   private lastResult: OCRResult | null = null;
   private extractedNumbers: string[] = [];
+  private extractedWords: string[] = [];
   private isStartingCamera = false;
   private capturedLocation: { latitude: number; longitude: number } | null = null;
 
@@ -172,6 +173,21 @@ export class OCRInterface {
   }
 
   /**
+   * Extract words from text (sequences of word characters, length >= 2, no whitespace)
+   */
+  private extractWords(text: string): string[] {
+    // Match word characters (letters, including international characters), at least 2 long
+    const matches = text.match(/\b[\p{L}]{2,}\b/gu);
+
+    if (!matches) {
+      return [];
+    }
+
+    // Remove duplicates and sort alphabetically
+    return [...new Set(matches)].sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
    * Render the results view
    */
   private renderResultsView(): void {
@@ -180,8 +196,9 @@ export class OCRInterface {
       return;
     }
 
-    // Extract number sequences
+    // Extract number sequences and words
     this.extractedNumbers = this.extractNumberSequences(this.lastResult.text);
+    this.extractedWords = this.extractWords(this.lastResult.text);
 
     const numbersHtml =
       this.extractedNumbers.length > 0
@@ -195,6 +212,32 @@ export class OCRInterface {
               <div class="number-chip">
                 <span class="number-text">${num}</span>
                 <button class="copy-number-btn" data-index="${index}" title="Copy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        </div>
+      `
+        : "";
+
+    const wordsHtml =
+      this.extractedWords.length > 0
+        ? `
+        <div class="words-section">
+          <h3>Detected Words</h3>
+          <div class="word-chips">
+            ${this.extractedWords
+              .map(
+                (word, index) => `
+              <div class="word-chip">
+                <span class="word-text">${word}</span>
+                <button class="copy-word-btn" data-index="${index}" title="Copy">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -232,6 +275,7 @@ export class OCRInterface {
         </div>
 
         ${numbersHtml}
+        ${wordsHtml}
 
         <textarea class="results-area" readonly>${this.lastResult.text}</textarea>
         <div class="button-group">
@@ -318,6 +362,7 @@ export class OCRInterface {
     const copyBtn = this.container.querySelector("#copy-text");
     const scanAgainBtn = this.container.querySelector("#scan-again");
     const copyNumberBtns = this.container.querySelectorAll(".copy-number-btn");
+    const copyWordBtns = this.container.querySelectorAll(".copy-word-btn");
 
     copyBtn?.addEventListener("click", () => this.handleCopyText());
     scanAgainBtn?.addEventListener("click", () => this.handleReset());
@@ -330,6 +375,17 @@ export class OCRInterface {
           10,
         );
         this.handleCopyNumber(index);
+      });
+    });
+
+    // Attach event listeners to each word copy button
+    copyWordBtns.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const index = parseInt(
+          (e.currentTarget as HTMLElement).dataset.index || "0",
+          10,
+        );
+        this.handleCopyWord(index);
       });
     });
   }
@@ -540,6 +596,35 @@ export class OCRInterface {
       }
     } catch (error) {
       console.error("Failed to copy number:", error);
+    }
+  }
+
+  /**
+   * Handle copy word button click
+   */
+  private async handleCopyWord(index: number): Promise<void> {
+    if (index < 0 || index >= this.extractedWords.length) {
+      return;
+    }
+
+    const word = this.extractedWords[index];
+
+    try {
+      await navigator.clipboard.writeText(word);
+
+      // Visual feedback
+      const btn = this.container.querySelector(
+        `.copy-word-btn[data-index="${index}"]`,
+      );
+      if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span style="font-size: 14px;">✓</span>';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+        }, 2000);
+      }
+    } catch (error) {
+      console.error("Failed to copy word:", error);
     }
   }
 
