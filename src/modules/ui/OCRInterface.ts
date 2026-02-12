@@ -11,6 +11,7 @@ export class OCRInterface {
   private lastResult: OCRResult | null = null;
   private extractedNumbers: string[] = [];
   private isStartingCamera = false;
+  private capturedLocation: { latitude: number; longitude: number } | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -127,6 +128,33 @@ export class OCRInterface {
   }
 
   /**
+   * Get current geolocation
+   */
+  private async getCaptureLocation(): Promise<{ latitude: number; longitude: number } | null> {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported');
+      return null;
+    }
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          timeout: 5000,
+          maximumAge: 0,
+        });
+      });
+
+      return {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+    } catch (error) {
+      console.warn('Failed to get location:', error);
+      return null;
+    }
+  }
+
+  /**
    * Extract number sequences from text
    */
   private extractNumberSequences(text: string): string[] {
@@ -181,11 +209,26 @@ export class OCRInterface {
       `
         : "";
 
+    const locationHtml = this.capturedLocation
+      ? `
+        <div class="location-info">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <a href="https://www.google.com/maps?q=${this.capturedLocation.latitude},${this.capturedLocation.longitude}" target="_blank" rel="noopener noreferrer" class="location-link">
+            ${this.capturedLocation.latitude.toFixed(6)}, ${this.capturedLocation.longitude.toFixed(6)}
+          </a>
+        </div>
+      `
+      : '';
+
     this.container.innerHTML = `
       <div class="ocr-container">
         <h2>Extracted Text</h2>
         <div class="results-info">
           <span>Confidence: ${Math.round(this.lastResult.confidence)}%</span>
+          ${locationHtml}
         </div>
 
         ${numbersHtml}
@@ -406,6 +449,9 @@ export class OCRInterface {
     try {
       this.renderProcessingView();
 
+      // Start location capture in parallel with OCR
+      const locationPromise = this.getCaptureLocation();
+
       // Initialize OCR engine if not already initialized
       if (!this.ocrEngine.isReady()) {
         await this.ocrEngine.initialize((progress) => {
@@ -428,6 +474,9 @@ export class OCRInterface {
       // Perform OCR on the canvas
       const result = await this.ocrEngine.recognizeText(canvas);
       this.lastResult = result;
+
+      // Wait for location to complete (or timeout)
+      this.capturedLocation = await locationPromise;
 
       // Show results
       this.renderResultsView();
@@ -500,6 +549,7 @@ export class OCRInterface {
   private handleReset(): void {
     this.capturedImageData = null;
     this.lastResult = null;
+    this.capturedLocation = null;
     this.renderIdleView();
   }
 
